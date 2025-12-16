@@ -1080,11 +1080,49 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
       // 6. Vite config
       zip.file("vite.config.ts", "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\n\nexport default defineConfig({ plugins: [react()], })");
+      
+      // 7. TSConfig (Crucial for Vercel)
+      const tsConfig = {
+        "compilerOptions": {
+          "target": "ES2020",
+          "useDefineForClassFields": true,
+          "lib": ["ES2020", "DOM", "DOM.Iterable"],
+          "module": "ESNext",
+          "skipLibCheck": true,
+          "moduleResolution": "bundler",
+          "allowImportingTsExtensions": true,
+          "resolveJsonModule": true,
+          "isolatedModules": true,
+          "noEmit": true,
+          "jsx": "react-jsx",
+          "strict": true,
+          "noUnusedLocals": true,
+          "noUnusedParameters": true,
+          "noFallthroughCasesInSwitch": true
+        },
+        "include": ["src"],
+        "references": [{ "path": "./tsconfig.node.json" }]
+      };
+      zip.file("tsconfig.json", JSON.stringify(tsConfig, null, 2));
 
-      // 7. README
+      // 8. TSConfig Node
+      const tsConfigNode = {
+        "compilerOptions": {
+          "composite": true,
+          "skipLibCheck": true,
+          "module": "ESNext",
+          "moduleResolution": "bundler",
+          "allowSyntheticDefaultImports": true
+        },
+        "include": ["vite.config.ts"]
+      };
+      zip.file("tsconfig.node.json", JSON.stringify(tsConfigNode, null, 2));
+
+
+      // 9. README
       zip.file("README.md", "# BESS Analysis Tool (Vercel Ready)\n\nOm dit te publiceren via Vercel:\n\n1. Kopieer de code uit de online editor.\n2. Plak deze in `src/App.tsx` (overschrijf alles).\n3. Upload deze hele map naar een nieuwe GitHub Repository.\n4. Ga naar Vercel.com -> New Project -> Importeer je GitHub repo.\n5. Klik 'Deploy'. Vercel doet de rest (installeren en bouwen).");
 
-      // 8. Placeholder App.tsx (Robuuste versie)
+      // 10. Placeholder App.tsx (Robuuste versie)
       const placeholderApp = `// STAP VOOR VERCEL DEPLOYMENT:
 // 1. Ga terug naar de online editor.
 // 2. Kopieer ALLE code (CTRL+A, CTRL+C).
