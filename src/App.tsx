@@ -16,7 +16,7 @@ import {
   Cell,
   LineChart
 } from 'recharts';
-import { Upload, Battery, AlertTriangle, Calendar, Activity, TrendingDown, TrendingUp, ZapOff, AlertOctagon, List, Settings, BarChart3, Fuel, Coins, Percent, Zap, Printer, Sun, Info, Trash2, Clock, Truck, Scale, Banknote, PieChart as PieIcon, FileText, Zap as ZapIcon, RefreshCw, Download } from 'lucide-react';
+import { Upload, Battery, AlertTriangle, Calendar, Activity, TrendingDown, TrendingUp, ZapOff, AlertOctagon, List, Settings, BarChart3, Fuel, Coins, Percent, Zap, Printer, Sun, Info, Trash2, Clock, Truck, Scale, Banknote, PieChart as PieIcon, FileText, Zap as ZapIcon, Download } from 'lucide-react';
 
 // --- TYPES ---
 type DataPoint = {
@@ -97,7 +97,7 @@ type YearlyResult = {
   deficitAfterSolar: number;
   restrictedVolumeLoad: number; 
   dieselPercentage: number;
-  dieselLiters: number; // Added for new chart
+  dieselLiters: number;
   tradingVolumePotentialMWh: number; 
   tradingVolumePercent: number;
   // Mix data for table
@@ -146,14 +146,13 @@ type AnalysisResult = {
 
 // --- CUSTOM LABEL COMPONENT ---
 const CustomizedLabel = (props: any) => {
-  const { x, y, width, height, value, index, total } = props;
+  const { x, y, width, height, value, total } = props;
   
   if (value === null || value === undefined || value === 0 || typeof value === 'object') return null;
 
   const startX = x + width;
   const startY = y + height / 2;
-  const staggerOffset = (index || 0) * 35; 
-  const endX = startX + 30 + staggerOffset; 
+  const endX = startX + 30; 
   const endY = startY;
   const textX = endX + 5;
   const textY = endY;
@@ -189,16 +188,12 @@ const CustomizedLabel = (props: any) => {
 
 // --- HELPER: DATA GENERATION ---
 const getYearDataOrFallback = (targetYear: number, sourceData: DataPoint[]) => {
-    // 1. Try to find actual data for this year
     const specificYearData = sourceData.filter(d => d.datetime.getFullYear() === targetYear);
     
-    // If we have substantial data (e.g. > 24 hours), use it
     if (specificYearData.length > 24) { 
         return specificYearData;
     }
     
-    // 2. If no data (e.g. uploaded CSV stops at 2030), generate a "Clean" 10MW profile for the whole year
-    // This solves the issue where 2036 appears empty if the CSV doesn't go that far
     const data: DataPoint[] = [];
     const start = new Date(targetYear, 0, 1, 0, 0, 0);
     const end = new Date(targetYear, 11, 31, 23, 0, 0);
@@ -206,7 +201,7 @@ const getYearDataOrFallback = (targetYear: number, sourceData: DataPoint[]) => {
     for (let d = new Date(start); d <= end; d.setHours(d.getHours() + 1)) {
         data.push({
             datetime: new Date(d),
-            limitMW: 10 // Default to max connection (no congestion)
+            limitMW: 10 
         });
     }
     return data;
@@ -227,7 +222,6 @@ const runSimulation = (
   cscEndDate: Date
 ): AnalysisResult => {
   if (yearData.length === 0) {
-      // Should ideally be caught by getYearDataOrFallback, but as safety:
       const hoursInYear = 8760;
       const totalTradingPotential = hoursInYear * batteryPowerMW;
       
@@ -258,12 +252,9 @@ const runSimulation = (
   }
 
   yearData.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
-  // Sort solar data if exists
   if(solarData.length > 0) solarData.sort((a, b) => a.datetime.getTime() - b.datetime.getTime());
 
-  // Optimize solar lookup
   const solarMap = new Map<string, number>();
-  // Helper to normalize date string for map key (Month-Day-Hour) to handle different years
   const getKey = (d: Date) => `${d.getMonth()}-${d.getDate()}-${d.getHours()}`;
   
   solarData.forEach(s => solarMap.set(getKey(s.datetime), s.generationMW));
@@ -315,15 +306,13 @@ const runSimulation = (
       const monthIndex = point.datetime.getMonth();
       const hour = point.datetime.getHours();
       
-      // Determine grid limit based on CSC profile or End Date
       let gridLimit = Math.max(0, point.limitMW);
       if (point.datetime.getTime() >= cscEndTime) {
-          gridLimit = 10; // CSC restrictions lifted
+          gridLimit = 10; 
       }
 
       const availableGrid = Math.min(gridLimit, connectionMax);
       
-      // Get Solar Data (try direct year match, then fallback to month-day-hour match)
       let rawSolarGen = 0;
       const key = getKey(point.datetime);
       if (solarMap.has(key)) {
@@ -370,7 +359,6 @@ const runSimulation = (
       let finalShortage = 0;
       let isBatteryActive = false;
 
-      // 3. Battery Logic
       if (shortagePreBat > 0) {
           const dischargePotential = Math.min(shortagePreBat, currentSoC, maxDischargeRate);
           batToLoad = dischargePotential;
@@ -407,7 +395,6 @@ const runSimulation = (
       if (isBatteryActive) {
           batteryBusyHours++;
       } else {
-          // Handelspotentieel = overgebleven ruimte op grid aansluiting
           const unusedGridCapacity = Math.max(0, gridLimit - gridToLoad);
           const tradingPotential = Math.min(batteryPowerMW, unusedGridCapacity);
           tradingVolumePotentialMWh += tradingPotential;
@@ -613,6 +600,7 @@ const App = () => {
   
   // Logistics
   const [logisticsMW, setLogisticsMW] = useState<number>(0.5);
+  // Restore setters for usage
   const [logisticsStartHour, setLogisticsStartHour] = useState<number>(6);
   const [logisticsEndHour, setLogisticsEndHour] = useState<number>(18);
   
@@ -621,41 +609,33 @@ const App = () => {
   const [targetSolarMWp, setTargetSolarMWp] = useState<number>(4.0);
   const [showSolarWarning, setShowSolarWarning] = useState<boolean>(false);
   
+  // Restore setters for usage
   const [dieselKwhPerLiter, setDieselKwhPerLiter] = useState<number>(3.5);
   const [dieselPrice, setDieselPrice] = useState<number>(1.50);
   const [electricityPrice, setElectricityPrice] = useState<number>(100);
 
   const availableYears = [2024, 2025, 2026, 2027, 2028, 2029, 2030, 2031, 2032, 2033, 2034, 2035, 2036]; 
   
-  const dcGrowthSchedule: Record<number, number> = {
-    2027: 2, 2028: 4, 2029: 6,
-  };
-
   // --- AUTO LOAD LOGIC ---
   useEffect(() => {
-    // FORCE RELOAD WITH NEW KEY _v7
-    const storedGrid = localStorage.getItem('bess_grid_csv_v7');
-    const storedSolar = localStorage.getItem('bess_solar_csv_v7');
+    // FORCE RELOAD WITH NEW KEY _v8 (Cleaned code version)
+    const storedGrid = localStorage.getItem('bess_grid_csv_v8');
+    const storedSolar = localStorage.getItem('bess_solar_csv_v8');
     
     let loaded = false;
     
     if (storedGrid) {
-        // Try to parse stored grid
-        const lines = storedGrid.split(/\r?\n/);
-        // Quick check if 2036 is present in data (very rough check)
         if (storedGrid.includes("2036-12")) {
              handleCSVContent(storedGrid, 'grid', false);
              setIsUsingMockData(false);
              loaded = true;
         } else {
-             // Stored data is stale (doesn't contain 2036), regenerate
-             console.log("Old data detected, regenerating mock data...");
-             handleCSVContent(generateMockData(), 'grid', true); // Force save new data
+             handleCSVContent(generateMockData(), 'grid', true); 
              setIsUsingMockData(true);
              loaded = true;
         }
     } else {
-        handleCSVContent(generateMockData(), 'grid', true); // Generate and save
+        handleCSVContent(generateMockData(), 'grid', true); 
         setIsUsingMockData(true);
         loaded = true;
     }
@@ -704,16 +684,14 @@ const App = () => {
   };
 
   const handleClearStorage = () => {
-      localStorage.removeItem('bess_grid_csv_v7');
-      localStorage.removeItem('bess_solar_csv_v7');
-      window.location.reload();
+      // Calls hard reset logic to be safe and robust
+      handleHardReset();
   };
 
   const handleCSVContent = (csvString: string, type: 'grid' | 'solar', saveToStorage: boolean) => {
     try {
       if (saveToStorage) {
-          // Use v7 keys for saving
-          localStorage.setItem(type === 'grid' ? 'bess_grid_csv_v7' : 'bess_solar_csv_v7', csvString);
+          localStorage.setItem(type === 'grid' ? 'bess_grid_csv_v8' : 'bess_solar_csv_v8', csvString);
       }
 
       const lines = csvString.split(/\r?\n/);
@@ -772,7 +750,6 @@ const App = () => {
   const multiYearStats: YearlyResult[] = useMemo(() => {
     if (rawData.length === 0) return [];
     
-    // Filter availableYears to only show years >= startYear
     const filteredYears = availableYears.filter(y => y >= startYear);
 
     return filteredYears.map(year => {
@@ -803,7 +780,6 @@ const App = () => {
         const maxTradingVolume = 8760 * batteryPowerMW; 
         const tradingVolumePercent = maxTradingVolume > 0 ? (res.tradingVolumePotentialMWh / maxTradingVolume) * 100 : 0;
 
-        // Calculations for Capacity Trend Graph
         const connectionMax = 10; 
         const dcActual = cap * (dcUtilizationFactor / 100);
         const logisticsActual = year >= startYear ? logisticsMW : 0;
@@ -874,7 +850,6 @@ const App = () => {
   
   const fmtMWh = (n: number | undefined | null) => {
     if (n == null || isNaN(n)) return '0';
-    // Round to whole numbers if >= 1000, else keep 1 decimal
     const digits = Math.abs(n) >= 1000 ? 0 : 1;
     return n.toLocaleString('nl-NL', { minimumFractionDigits: digits, maximumFractionDigits: digits });
   };
@@ -1007,8 +982,7 @@ const App = () => {
 
   const handleDownloadProject = async () => {
     try {
-      // Import JSZip dynamically from CDN (ESM)
-      // Note: This relies on internet access and CSP allowing unpkg/cdnjs
+      // @ts-ignore
       const { default: JSZip } = await import('https://cdn.skypack.dev/jszip');
       
       const zip = new JSZip();
@@ -1080,7 +1054,7 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
 
       // 6. Vite config
       zip.file("vite.config.ts", "import { defineConfig } from 'vite'\nimport react from '@vitejs/plugin-react'\n\nexport default defineConfig({ plugins: [react()], })");
-      
+
       // 7. TSConfig (Crucial for Vercel)
       const tsConfig = {
         "compilerOptions": {
@@ -1117,7 +1091,6 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
         "include": ["vite.config.ts"]
       };
       zip.file("tsconfig.node.json", JSON.stringify(tsConfigNode, null, 2));
-
 
       // 9. README
       zip.file("README.md", "# BESS Analysis Tool (Vercel Ready)\n\nOm dit te publiceren via Vercel:\n\n1. Kopieer de code uit de online editor.\n2. Plak deze in `src/App.tsx` (overschrijf alles).\n3. Upload deze hele map naar een nieuwe GitHub Repository.\n4. Ga naar Vercel.com -> New Project -> Importeer je GitHub repo.\n5. Klik 'Deploy'. Vercel doet de rest (installeren en bouwen).");
@@ -1232,10 +1205,9 @@ export default function App() {
                 <Download size={16} /><span>Project (ZIP)</span>
              </button>
              
-             <button type="button" onClick={handleHardReset} className="flex items-center gap-2 cursor-pointer bg-red-100 hover:bg-red-200 text-red-700 px-3 py-2 rounded-md transition-colors text-sm font-medium" title="Harde Reset (Data wissen)">
-                <RefreshCw size={16} /><span>Reset</span>
-             </button>
-             
+             {/* Combined Reset Functionality in Trash Icon */}
+             {hasLoadedFromStorage && !isUsingMockData && (<button onClick={handleClearStorage} className="text-slate-400 hover:text-red-500 transition-colors hide-in-preview" title="Reset data (Wist alle data)"><Trash2 size={16}/></button>)}
+
              <label className="flex items-center gap-2 cursor-pointer bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md transition-colors text-sm font-medium hide-in-preview">
                 <Upload size={16} /><span>Grid Profiel</span><input type="file" accept=".csv, text/csv" onChange={(e) => handleFileUpload(e, 'grid')} className="hidden" onClick={(e) => (e.target as HTMLInputElement).value = ''} />
              </label>
@@ -1243,7 +1215,6 @@ export default function App() {
                 <Sun size={16} /><span>Zon Profiel</span><input type="file" accept=".csv, text/csv" onChange={(e) => handleFileUpload(e, 'solar')} className="hidden" onClick={(e) => (e.target as HTMLInputElement).value = ''} />
              </label>
              {isUsingMockData && <span className="text-xs text-amber-600 font-medium bg-amber-50 px-2 py-1 rounded hide-in-preview">Demo Data</span>}
-             {hasLoadedFromStorage && !isUsingMockData && (<button onClick={handleClearStorage} className="text-slate-400 hover:text-red-500 transition-colors hide-in-preview" title="Reset data"><Trash2 size={16}/></button>)}
         </div>
       </div>
 
@@ -1331,6 +1302,24 @@ export default function App() {
                         <div><div className="flex items-center gap-2"><input type="number" min="10" max="100" step="5" value={dcUtilizationFactor} onChange={handleInputChange(setDcUtilizationFactor)} className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" /><span className="text-slate-400 text-xs">%</span></div><span className="text-[10px] text-slate-400">Benutting</span></div>
                     </div>
                 </div>
+                
+                {/* Cost Parameters Section (Restored) */}
+                <div className="border-t border-slate-100 pt-4 space-y-4">
+                    <h3 className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Kosten Parameters</h3>
+                    <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Diesel Prijs (€/L)</label>
+                        <input type="number" min="0" step="0.01" value={dieselPrice} onChange={handleInputChange(setDieselPrice)} className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Conversie (kWh/L)</label>
+                        <input type="number" min="0" step="0.1" value={dieselKwhPerLiter} onChange={handleInputChange(setDieselKwhPerLiter)} className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" />
+                    </div>
+                     <div>
+                        <label className="block text-sm font-medium text-slate-600 mb-1">Stroomprijs (€/MWh)</label>
+                        <input type="number" min="0" step="1" value={electricityPrice} onChange={handleInputChange(setElectricityPrice)} className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" />
+                    </div>
+                </div>
+
                 <div className="border-t border-slate-100 pt-4 space-y-4">
                      <div><label className="block text-sm font-medium text-slate-600 mb-1">Logistiek (MW)</label><input type="number" min="0" step="0.1" value={logisticsMW} onChange={handleInputChange(setLogisticsMW)} className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" /></div>
                      <div><label className="block text-sm font-medium text-slate-600 mb-1">Batterij (MW / MWh)</label><div className="grid grid-cols-2 gap-2"><input type="number" value={batteryPowerMW} onChange={handleInputChange(setBatteryPowerMW)} className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" /><input type="number" value={batteryCapacityMWh} onChange={handleInputChange(setBatteryCapacityMWh)} className="w-full p-2 border border-slate-300 rounded-md bg-slate-50 text-sm" /></div></div>
